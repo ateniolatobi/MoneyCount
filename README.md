@@ -42,6 +42,8 @@
 
 ## Application Screenshots
 [Click the link to watch a video of the application being tested.](https://www.youtube.com/watch?v=amLbo-qCWyU&t=9s)
+
+
 <img src="https://github.com/ateniolatobi/MoneyCount/blob/master/assets/5.jpg" width="40%"> <img src="https://github.com/ateniolatobi/MoneyCount/blob/master/assets/10.jpg" width="40%">
 <img src="https://github.com/ateniolatobi/MoneyCount/blob/master/assets/20.jpg" width="40%"> <img src="https://github.com/ateniolatobi/MoneyCount/blob/master/assets/50.jpg" width="40%">
 <img src="https://github.com/ateniolatobi/MoneyCount/blob/master/assets/100.jpg" width="40%"> <img src="https://github.com/ateniolatobi/MoneyCount/blob/master/assets/1000.jpg" width="40%">
