@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">MoneyCount</string>
+    <string name="identify">IDENTIFY</string>
+    <string name="sum">SUM</string>
+</resources>
