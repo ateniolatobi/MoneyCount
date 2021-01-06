@@ -46,21 +46,27 @@ import java.util.Comparator;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int REQUEST_CAMERA_PERMISSION_RESULT = 0;
-    private static final int REQUEST_WRITE_EXTERNAL_STORAGE_PERMISSION_RESULT = 0;
-    private static final int STATE_PREVIEW = 0;
-    private static final int STATE_WAIT_LOCK = 1;
-    boolean hasCap;
-    private int mCaptureState = STATE_PREVIEW;
-    MediaPlayer noimage = null;
-    MediaPlayer detecting = null;
-    private TextureView  mTextureView;
-    Classifier classifier;
+    private static final int REQUEST_CAMERA_PERMISSION_RESULT = 0; // 0 if camera permission is not granted
+    private static final int REQUEST_WRITE_EXTERNAL_STORAGE_PERMISSION_RESULT = 0; // 0 if external storage permission is not granted
+    private static final int STATE_PREVIEW = 0; // constant value for camera still focusing.
+    private static final int STATE_WAIT_LOCK = 1; // constant value for ready to capture.
+    boolean hasCap; // track if picture is taken.
+    private int mCaptureState = STATE_PREVIEW; // manages when camera is in autofocus.
+    MediaPlayer noimage = null; // mediaplayer for noimage detected sound byte
+    MediaPlayer detecting = null; // mediaplayer for detecting soundbyte
+    private TextureView  mTextureView; // mTextureView to display camera areea
+    Classifier classifier; // deep learning model.
+
+    //  TextureView.SurfaceTextureListener is used to listen on the launch screen.
     private TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+
+        //  The onSurfaceTextureAvailable function gets called as soon as the screen is ready for use.
+        //  The listener also provides the width and height of the screen with the surface instance.
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            setUpCamera(width, height);
-            connectCamera();
+
+            setUpCamera(width, height); // setupcamera function is called to setup important fields and methods in order to connect the camera.
+            connectCamera(); // connects the Camera
         }
 
         @Override
@@ -78,16 +84,18 @@ public class MainActivity extends AppCompatActivity {
 
         }
     };
-    private CameraDevice mCameraDevice;
+    private CameraDevice mCameraDevice; // camera device
+
+    // mCameraDeviceStateCallBack provides an anonymous function that can check if the app is open or not and start the camera preview in the app.
     private CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
         @Override
-        public void onOpened(CameraDevice camera) {
+        public void onOpened(CameraDevice camera) { // opens camera when application is opened.
             mCameraDevice = camera;
             startPreview();
         }
 
         @Override
-        public void onDisconnected(CameraDevice camera) {
+        public void onDisconnected(CameraDevice camera) { // closes camera when application is closed for other apps.
             camera.close();
             mCameraDevice = null;
 
@@ -100,23 +108,22 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private HandlerThread mBackgroundHandlerThread;
-    private Handler mBackgroundHandler;
-    private String mCameraId;
-    private Size mPreviewSize;
+    private HandlerThread mBackgroundHandlerThread; // BackgroundHandler Thread
+    private Handler mBackgroundHandler; //Background Handler
+    private String mCameraId; // Camera Sensor Id
+    private Size mPreviewSize; // Camera preview dimension
     Button total;
     private CameraCaptureSession mPreviewCaptureSession;
     private CameraCaptureSession.CaptureCallback mPreviewCaptureCallback = new CameraCaptureSession.CaptureCallback() {
         private void process(CaptureResult captureResult){
-            switch (mCaptureState){
+            switch (mCaptureState){ // If capturestate is 1 takes picture
                 case STATE_PREVIEW:
                     //Do nothing
                     break;
                 case STATE_WAIT_LOCK:
-                    mCaptureState = STATE_PREVIEW;
+                    mCaptureState = STATE_PREVIEW; // sets captureState to preview state.
                     Integer afState = captureResult.get(CaptureResult.CONTROL_AF_STATE);
-
-                            startStillCaptureRequest();
+                    startStillCaptureRequest();
                     break;
             }
         }
@@ -126,53 +133,55 @@ public class MainActivity extends AppCompatActivity {
         }
     };
     private CaptureRequest.Builder mCaptureRequestBuilder;
-    private Size mImageSize;
-    private ImageReader mImageReader;
+    private Size mImageSize; // Captured Image dimension.
+    private ImageReader mImageReader; // Captured Image Reader
+
+
+    //  mOnImageAvailableListener is an anonymous class that utilizes the onImageAvailable() function which is called when the identify button is clicked.
+    // this processes the latest image captured, runs through the deep learning model and then returns the prediction to the user.
     private final  ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
-        public void onImageAvailable(ImageReader reader) {
+        public void onImageAvailable(ImageReader reader) { // onImageAvailable() is called once the user clicks the identify button.
             Image mImage = reader.acquireLatestImage();
-            ByteBuffer byteBuffer = mImage.getPlanes()[0].getBuffer();
+            ByteBuffer byteBuffer = mImage.getPlanes()[0].getBuffer(); // converts to bytbuffer
 
-            byte[] bytes = new byte[byteBuffer.remaining()];
-            byteBuffer.get(bytes);
-            final Bitmap bmp= BitmapFactory.decodeByteArray(bytes,0,bytes.length);
+            byte[] bytes = new byte[byteBuffer.remaining()]; // creates byte array.
+            byteBuffer.get(bytes); // converts bytebuffer to byte array.
+            final Bitmap bmp= BitmapFactory.decodeByteArray(bytes,0,bytes.length); // converts bytes to bitmap.
             Matrix matrix = new Matrix();
             matrix.postRotate(90);
-            final Bitmap rotatedBitmap = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true);
-            runOnUiThread(new Runnable() {
+            final Bitmap rotatedBitmap = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true); // Rotates the bitmap needed for model.
+            runOnUiThread(new Runnable() { // Creates sperate thread to run the model on the bitmap image.
 
                 @Override
                 public void run() {
 
                     // Stuff that updates the UI
-                    String pred = classifier.predict(rotatedBitmap);
-                    total_amount = total_amount + Integer.parseInt(pred);
+                    String pred = classifier.predict(rotatedBitmap); // gets predicted currency
+                    total_amount = total_amount + Integer.parseInt(pred); // converts to image and add to total amount
                     NumToWord obj = new NumToWord();
-                    MediaPlayer detectd = MediaPlayer.create(getApplicationContext(),  getStringIdentifier(getApplicationContext(), "detected"));
-                    detectd.start();
-                    convertText(obj.convert(Integer.parseInt(pred)));
+                    MediaPlayer detectd = MediaPlayer.create(getApplicationContext(),  getStringIdentifier(getApplicationContext(), "detected")); // Loads up the detected sound byte
+                    detectd.start(); // plays the detected sound
+                    convertText(obj.convert(Integer.parseInt(pred))); // loads the denomination and plays the respective soundbyte.
                     Toast.makeText(getApplicationContext(), "Detected "+obj.convert(Integer.parseInt(pred)) + " naira", Toast.LENGTH_SHORT).show();
 
                 }
 
             });
-            mImage.close();
+            mImage.close();  // closes image
 
         }
     };
 
-    private File mImageFolder;
-    private String mImageFileName;
-    private Button mStillImageButton;
-    private static SparseIntArray ORIENTATIONS = new SparseIntArray();
+    private Button mStillImageButton; // identify button
+    private static SparseIntArray ORIENTATIONS = new SparseIntArray(); // orientations array.
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 0);
         ORIENTATIONS.append(Surface.ROTATION_90, 90);
         ORIENTATIONS.append(Surface.ROTATION_180, 180);
         ORIENTATIONS.append(Surface.ROTATION_270, 270);
     }
-
+    // compareSizeByArea, used as a comparator for sorting various dimensions with width and height provided.
     private static class CompareSizeByArea implements Comparator<Size> {
 
         @Override
@@ -183,54 +192,55 @@ public class MainActivity extends AppCompatActivity {
 
 
 
-    int total_amount;
-    boolean hasSummed;
+    int total_amount; // total amount
+    boolean hasSummed; // check if sum had been taken.
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        hasCap = false;
+        hasCap = false; //
         hasSummed = false;
         total_amount = 0;
-        final MediaPlayer welcome = MediaPlayer.create(this, R.raw.welcome);
-        final MediaPlayer totalaudio = MediaPlayer.create(this, R.raw.totamount);
-        noimage = MediaPlayer.create(this, R.raw.noimage);
-        detecting = MediaPlayer.create(this, R.raw.detecting);
-        welcome.start();
+        final MediaPlayer welcome = MediaPlayer.create(this, R.raw.welcome); // loads welcome soundbyte
+        final MediaPlayer totalaudio = MediaPlayer.create(this, R.raw.totamount); // loads totalamoun soundbyte
+        noimage = MediaPlayer.create(this, R.raw.noimage);  // loads no image detected soundbyte
+        detecting = MediaPlayer.create(this, R.raw.detecting); // loads detecting sound byte
+        welcome.start(); // plays welcome sound
         Toast.makeText(getApplicationContext(), "app started ", Toast.LENGTH_SHORT).show();
-        mTextureView = (TextureView) findViewById(R.id.textureView);
-        mStillImageButton = (Button) findViewById(R.id.identify);
-        total = (Button) findViewById(R.id.sum);
-        classifier = new Classifier(Utils.assetFilePath(this, "nairanetmobile.pt"));
+        mTextureView = (TextureView) findViewById(R.id.textureView); // textureview to load cameraview.
+        mStillImageButton = (Button) findViewById(R.id.identify); // identify button.
+        total = (Button) findViewById(R.id.sum); // sum up button.
+        classifier = new Classifier(Utils.assetFilePath(this, "nairanetmobile.pt")); // Loads deeplearning model.
+
+        // onClickListener for identify button.
         mStillImageButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (hasSummed){
+                if (hasSummed){ // if total has been clicked reset total and hasSum
                     total_amount = 0;
                     hasSummed = false;
                 }
-                detecting.start();
-                lockFocus();
+                detecting.start(); // plays detecting sound byte
+                lockFocus(); // locks camera focus
             }
         });
 
+        // onClickListener to take total count
         total.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (total_amount != 0){
                     hasSummed = true;
                     final NumToWord obj = new NumToWord();
-                    totalaudio.start();
-                    convertText(obj.convert(total_amount));
+                    totalaudio.start(); // plays total soundbyte
+                    convertText(obj.convert(total_amount)); // plays soundbyte for summed up total
                     Toast.makeText(getApplicationContext(), "The total amount is "+ obj.convert(total_amount) + " naira",Toast.LENGTH_LONG).show();
 
                 }else{
                     MediaPlayer notyet = MediaPlayer.create(getApplicationContext(), R.raw.notyetsum);
-                    notyet.start();
+                    notyet.start(); // play soundbyte for no sum yet.
 
                 }
-
-
             }
         });
 
@@ -283,31 +293,33 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    // setUpCamera takes the width and height of the screen and loads the camera instance.
     private void setUpCamera(int width, int height){
-        CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
 
-        try {
-            for (String cameraId : cameraManager.getCameraIdList()){
+        CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE); // The CameraManager is responsible for interacting with the camera hardware.
+
+        try { // Error handling in case their is no camera or restrictive access to the camera.
+            for (String cameraId : cameraManager.getCameraIdList()){ // Loops through all cameras and gets their id
                 CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId);
-                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT){
+                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT){// If front facing camera, Ignore.
                     continue;
                 }
-                StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-                int deviceOrientation = getWindowManager().getDefaultDisplay().getRotation();
+                StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP); // Gets configuration of current camera.
+                int deviceOrientation = getWindowManager().getDefaultDisplay().getRotation(); // Returns current orientation of the device.
                 int totalRotation = sensorToDeviceRotation(cameraCharacteristics, deviceOrientation);
-                boolean swapRotation = totalRotation == 90 || totalRotation == 270;
+                boolean swapRotation = totalRotation == 90 || totalRotation == 270; // True if device is in  Landscape mode
                 int rotatedWidth  =  width;
                 int rotatedHeight = height;
-                if (swapRotation){
+                if (swapRotation){ // Swaps width and height if device in landscape mode.
                     rotatedHeight = width;
                     rotatedWidth = height;
                 }
 
-                mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class), rotatedWidth, rotatedHeight);
-                mImageSize = chooseOptimalSize(map.getOutputSizes(ImageFormat.JPEG), rotatedWidth, rotatedHeight);
-                mImageReader = ImageReader.newInstance(mImageSize.getWidth(), mImageSize.getHeight(), ImageFormat.JPEG, 1);
-                mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler);
-                mCameraId = cameraId;
+                mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class), rotatedWidth, rotatedHeight); // sets optimal preview size
+                mImageSize = chooseOptimalSize(map.getOutputSizes(ImageFormat.JPEG), rotatedWidth, rotatedHeight); // sets optimal capture size.
+                mImageReader = ImageReader.newInstance(mImageSize.getWidth(), mImageSize.getHeight(), ImageFormat.JPEG, 1); // sets Captured Image Reader
+                mImageReader.setOnImageAvailableListener(mOnImageAvailableListener, mBackgroundHandler); // sets Image Capture Listener and Background Handler
+                mCameraId = cameraId;  // cameraid of the camera we are using.
                 return;
             }
         } catch (CameraAccessException e){
@@ -315,10 +327,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // connectCamera connects the camera sensor view to the application texture.
     private void connectCamera(){
         CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){ // checks if the device android version requires explicit permission.
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED){
                     cameraManager.openCamera(mCameraId, mCameraDeviceStateCallback, mBackgroundHandler);
                 }else {
@@ -336,14 +349,15 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // startPreview() starts the camera preview and also allows the application to take pictures.
     private void startPreview(){
-        SurfaceTexture surfaceTexture = mTextureView.getSurfaceTexture();
-        surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-        Surface  previewSurface =  new Surface(surfaceTexture);
+        SurfaceTexture surfaceTexture = mTextureView.getSurfaceTexture(); // gets the surfaceTexture of the Texture area
+        surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());  // assigns the area to display the camera preview
+        Surface  previewSurface =  new Surface(surfaceTexture); // gets preview surface
 
         try {
             mCaptureRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-            mCaptureRequestBuilder.addTarget(previewSurface);
+            mCaptureRequestBuilder.addTarget(previewSurface); // uses the previewSurface to show the camera view
 
             mCameraDevice.createCaptureSession(Arrays.asList(previewSurface, mImageReader.getSurface()),
 
@@ -368,27 +382,21 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-
+    // startStillCaptureRequest(), gets called when a picture is taken
     private void startStillCaptureRequest(){
 
         try {
             mCaptureRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
             mCaptureRequestBuilder.addTarget(mImageReader.getSurface());
-//            mCaptureRequestBuilder.set(CaptureRequest.JPEG_ORIENTATION, mTotalRotation);
             CameraCaptureSession.CaptureCallback stillCaptureCallback = new CameraCaptureSession.CaptureCallback() {
                 @Override
                 public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
                     super.onCaptureStarted(session, request, timestamp, frameNumber);
 
-//                    try {
-//                        createImageFileName();
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                    }
                 }
             };
-            if (!hasCap){
-                mPreviewCaptureSession.capture(mCaptureRequestBuilder.build(), stillCaptureCallback, null);
+            if (!hasCap){  // if not hasCap, takes picture and makes hasCap True.
+                mPreviewCaptureSession.capture(mCaptureRequestBuilder.build(), stillCaptureCallback, null); // Takes picture
                 hasCap = true;
             }
 //
@@ -396,6 +404,8 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+
+    // closes the camera
     private void  closeCamera(){
         if (mCameraDevice != null){
             mCameraDevice.close();
@@ -420,15 +430,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // sensorToDeviceRotation takes the cameraCharacteristics of the current camera hardware and also the device
+    // orientation to estimate the total rotation.
     private static int sensorToDeviceRotation(CameraCharacteristics cameraCharacteristics, int deviceOrientation){
-        int sensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-        deviceOrientation = ORIENTATIONS.get(deviceOrientation);
-        return (sensorOrientation + deviceOrientation +360) % 360;
+        int sensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION); // Current sensor rotation
+        deviceOrientation = ORIENTATIONS.get(deviceOrientation); // converts device rotation to degrees.
+        return (sensorOrientation + deviceOrientation +360) % 360; // Calculate and returns total rotation.
     }
 
+    // chooseOptimalSize takes possible suitable display dimensions and the width and height of the screen, to choose the most optimal resolution.
     private static Size chooseOptimalSize(Size[] choices, int width, int height){
-        List<Size> bigEnough = new ArrayList<Size>();
-        for (Size option : choices){
+        List<Size> bigEnough = new ArrayList<Size>(); // Stores sizes bigger than the default width and height.
+        for (Size option : choices){ // loops through possible options and compare with width and height.
             if (option.getHeight() == option.getWidth() * height / width && option.getWidth() >= width
                     && option.getHeight() >= height){
 
@@ -436,41 +449,46 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        if (bigEnough.size() > 0){
+        if (bigEnough.size() > 0){ // Returns the minimum choice by area.
             return Collections.min(bigEnough, new CompareSizeByArea());
         }else{
             return  choices[0];
         }
     }
 
+    // lockFocus(), locks camera focus on an object.
     private void lockFocus(){
 
-        mCaptureState = STATE_WAIT_LOCK;
-        mCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+        mCaptureState = STATE_WAIT_LOCK; // sets captureState to lock on Image
+        mCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START); // Sets the camera to autofocus
         try {
-            mPreviewCaptureSession.capture(mCaptureRequestBuilder.build(), mPreviewCaptureCallback, mBackgroundHandler);
+            mPreviewCaptureSession.capture(mCaptureRequestBuilder.build(), mPreviewCaptureCallback, mBackgroundHandler); // takes picture
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
     }
 
-
+        // getStringIdentifier() takes the context and the audio file name, in order to load as raw.
         public int getStringIdentifier(Context context, String name) {
             return context.getResources().getIdentifier(name, "raw", context.getPackageName());
         }
+
+        // convertToText() Takes in the word equivalent of a number, loads into the MediaPlayer and plays the soundbyte.
         public void convertText(String numberWord){
-            String[] currencies = numberWord.split(" ");
+            String[] denoms = numberWord.split(" "); // splits words
             int i = 0;
-            for (String denom : currencies) {
+            for (String denom : denoms) { // Loops thorugh denoms
                 i += 1;
-                final MediaPlayer numb = MediaPlayer.create(getApplicationContext(),  getStringIdentifier(getApplicationContext(), denom));
+                final MediaPlayer numb = MediaPlayer.create(getApplicationContext(),  getStringIdentifier(getApplicationContext(), denom)); // loads denom soundbyte
                 final Handler handler = new Handler();
                 handler.postDelayed(new Runnable() {
                     @Override
                     public void run() {
                         numb.start();
-                    }}, 1300 * i);
+                    }}, 1300 * i); // plays denom soundbyte and delays.
             }
+
+            // loads and plays naira soundbyte
             final MediaPlayer numb = MediaPlayer.create(getApplicationContext(),  getStringIdentifier(getApplicationContext(), "naira"));
             final Handler handler = new Handler();
             handler.postDelayed(new Runnable() {

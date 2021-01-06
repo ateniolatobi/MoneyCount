@@ -1,6 +1,6 @@
 package com.example.moneycount;
 
-
+// Algorithm to convert number to word.
 public class NumToWord
 
 {
@@ -72,12 +72,6 @@ public class NumToWord
 
         if (number == 0) { return "zero"; }
 
-        String prefix = "";
-
-        if (number < 0) {
-            number = -number;
-            prefix = "negative";
-        }
 
         String current = "";
         int place = 0;
@@ -92,12 +86,7 @@ public class NumToWord
             number /= 1000;
         } while (number > 0);
 
-        return (prefix + current).trim();
+        return (current).trim();
     }
 
-//    public static void main(String[] args) {
-//        NumberToWord obj = new NumberToWord();
-//        System.out.println("*** " + obj.convert(123456789));
-//        System.out.println("*** " + obj.convert(-55));
-//    }
 }
