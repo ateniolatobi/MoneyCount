@@ -3,5 +3,5 @@ torchsummary==1.5.1
 torchtext==0.3.1
 torchvision==0.3.0
 
-numpy==1.16.4
+numpy==1.22.0
 matplotlib==3.0.3
